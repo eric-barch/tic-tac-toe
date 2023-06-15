@@ -36,6 +36,16 @@ class Row {
       this.cells.set(key, cell);
     }
   }
+
+  public isFull(): boolean {
+    for (const cell of this.cells.values()) {
+      if (cell.owner === Player.None) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 }
 
 class Board {
@@ -68,7 +78,7 @@ class Board {
     }
   }
 
-  public markCell(rowKey: string, columnKey: string, currentPlayer: Player) {
+  public claimCell(rowKey: string, columnKey: string, currentPlayer: Player) {
     const cell = this.getCell(rowKey, columnKey);
     cell.owner = currentPlayer;
   }
@@ -87,6 +97,16 @@ class Board {
     }
 
     return cell;
+  }
+
+  public isFull(): boolean {
+    for (const row of this.rows.values()) {
+      if (!row.isFull()) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   public hasWinner(): boolean {
@@ -191,9 +211,6 @@ class Board {
   }
 }
 
-const board = new Board(3);
-let currentPlayer = Player.X;
-
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout
@@ -203,13 +220,29 @@ const askQuestion = (query: string) => new Promise<string>(resolve =>
   rl.question(query, answer => resolve(answer))
 );
 
-async function gameLoop() {
+async function game() {
+  let board: Board;
+  let currentPlayer = Player.X;
+
+  while (true) {
+    const input = await askQuestion(`\nEnter the size of the game board (3 - 10): `);
+    const inputNumber = Number(input);
+
+    if (!(Number.isInteger(inputNumber) && inputNumber >= 3 && inputNumber <= 10)) {
+      console.log(`Invalid input. Enter a number between 3 and 10 inclusive.`);
+      continue;
+    }
+
+    board = new Board(inputNumber);
+    break;
+  }
+
   while (true) {
     board.display();
     const input = await askQuestion(`\nPlayer ${currentPlayer}, enter two characters specifying the row and column you want to claim. Order does not matter (e.g., AF is the same as FA): `);
 
     if (input.length !== 2) {
-      console.log(`Invalid input. Enter two characters.`);
+      console.log(`Invalid input. Enter two characters specifying the row and column you want to claim.`);
       continue;
     }
 
@@ -217,13 +250,13 @@ async function gameLoop() {
     const columnKey = sortedKeys[0];
     const rowKey = sortedKeys[1];
 
-    if (!(board.columnKeys.includes(columnKey)) || !(board.rowKeys.includes(rowKey))) {
-      console.log(`Invalid input. Please ensure your entry specifies the row and column you want to claim.`);
+    if (!(board.rowKeys.includes(rowKey)) || !(board.columnKeys.includes(columnKey))) {
+      console.log(`Invalid input. Enter two characters specifying the row and column you want to claim.`);
       continue;
     }
 
     try {
-      board.markCell(rowKey, columnKey, currentPlayer);
+      board.claimCell(rowKey, columnKey, currentPlayer);
     } catch (err) {
       console.log(`Invalid selection. ${err}`);
       continue;
@@ -236,18 +269,15 @@ async function gameLoop() {
       break;
     }
 
-    if (currentPlayer === Player.X) {
-      currentPlayer = Player.O;
-      continue;
+    if (board.isFull()) {
+      board.display();
+      console.log(`\nBoard is full. Game over.`);
+      rl.close();
+      break;
     }
 
-    if (currentPlayer === Player.O) {
-      currentPlayer = Player.X;
-      continue;
-    }
-
-    throw new Error(`No currentPlayer.`);
+    currentPlayer = (currentPlayer === Player.X) ? Player.O : Player.X;
   }
 }
 
-gameLoop();
+game();
