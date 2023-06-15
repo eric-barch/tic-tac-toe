@@ -7,15 +7,13 @@ enum Player {
 }
 
 class Cell {
-  private wrappedOwner: Player;
-
-  constructor() {
-    this.wrappedOwner = Player.None;
-  }
+  private wrappedOwner: Player = Player.None;
 
   public set owner(owner: Player) {
     if (this.owner === Player.None) {
       this.wrappedOwner = owner;
+    } else {
+      throw new Error('Cell has already been claimed.');
     }
   }
 
@@ -24,84 +22,91 @@ class Cell {
   }
 }
 
+class Row {
+  private size: number;
+  public readonly cells: Map<string, Cell>;
+
+  public constructor(size: number) {
+    this.size = size;
+    this.cells = new Map<string, Cell>;
+
+    for (let i = 0; i < this.size; i++) {
+      const key = String.fromCharCode(65 + i);
+      const cell = new Cell();
+      this.cells.set(key, cell);
+    }
+  }
+}
+
 class Board {
   private size: number;
-  private board: Map<string, Map<string, Cell>>;
+  public readonly rows: Map<string, Row>;
 
   public constructor(size: number) {
     if (size < 3 || size > 10) {
-      throw new Error('Size must be between 3 and 10');
+      throw new Error('Board size must be between 3 and 10.');
     }
 
     this.size = size;
+    this.rows = new Map<string, Row>;
 
-    this.board = new Map<string, Map<string, Cell>>();
-
-    for (let i = 0; i < size; i++) {
-      let row = new Map<string, Cell>();
-      for (let j = 0; j < size; j++) {
-        let cell = new Cell();
-        row.set(String.fromCharCode(65 + j), cell);
-      }
-      this.board.set(String.fromCharCode(65 + size + i), row)
+    for (let i = 0; i < this.size; i++) {
+      const key = String.fromCharCode(65 + size + i);
+      const row = new Row(this.size);
+      this.rows.set(key, row);
     }
   }
 
-  public displayBoard() {
-    let firstRow = Array.from(this.board.values())[0];
-    let headerLine = "\n  " + Array.from(firstRow.keys()).join(' ');
+  public display() {
+    console.log(`\n  ${this.columnKeys.join(` `)}`);
 
-    console.log(headerLine);
-
-    for (let [rowKey, rowValue] of this.board) {
-      let rowLine = rowKey + " ";
-
-      for (let cell of rowValue.values()) {
-        rowLine += cell.owner + " ";
-      }
-
-      console.log(rowLine);
+    for (const rowMap of this.rows) {
+      const rowKey = rowMap[0];
+      const rowValue = rowMap[1];
+      const cellOwners = Array.from(rowValue.cells.values()).map(cell => cell.owner);
+      console.log(`${rowKey} ${cellOwners.join(` `)}`);
     }
   }
 
-  public markCell(columnCoordinate: string, rowCoordinate: string, owner: Player) {
-    const row = this.board.get(rowCoordinate);
+  public markCell(rowKey: string, columnKey: string, currentPlayer: Player) {
+    const cell = this.getCell(rowKey, columnKey);
+    cell.owner = currentPlayer;
+  }
+
+  public getCell(rowKey: string, columnKey: string): Cell {
+    const row = this.rows.get(rowKey);
+
     if (!row) {
-      throw new Error('Invalid row coordinate');
+      throw new Error(`row is undefined.`);
     }
 
-    const cell = row.get(columnCoordinate);
+    const cell = row.cells.get(columnKey);
+
     if (!cell) {
-      throw new Error('Invalid column coordinate');
+      throw new Error(`cell is undefined.`);
     }
 
-    cell.owner = owner;
+    return cell;
   }
 
-  public checkWin(): boolean {
-    const rowWin = this.checkRowWin();
-    const columnWin = this.checkColumnWin();
-    const diagonalWin = this.checkDiagonalWin();
-
-    if (rowWin || columnWin || diagonalWin) {
+  public hasWinner(): boolean {
+    if (this.hasRowWinner() || this.hasColumnWinner() || this.hasDiagonalWinner()) {
       return true;
     }
 
     return false;
   }
 
-  private checkRowWin(): boolean {
-    for (const row of this.board.values()) {
-      let rowValues = Array.from(row.values());
-      let firstOwner = rowValues[0]?.owner;
+  private hasRowWinner(): boolean {
+    for (const rowKey of this.rowKeys) {
+      const rowOwners = new Array<Player>();
 
-      if (firstOwner === Player.None) {
-        continue;
+      for (const columnKey of this.columnKeys) {
+        const cellOwner = this.getCell(rowKey, columnKey).owner;
+        rowOwners.push(cellOwner);
       }
 
-      let allSameOwner = rowValues.every(cell => cell.owner === firstOwner);
-
-      if (allSameOwner) {
+      if (this.sameOwner(rowOwners)) {
         return true;
       }
     }
@@ -109,63 +114,84 @@ class Board {
     return false;
   }
 
-  private checkColumnWin(): boolean {
-    if (this.board.size === 0) return false; // No columns to check if board is empty
+  private hasColumnWinner(): boolean {
+    for (const columnKey of this.columnKeys) {
+      const columnOwners = new Array<Player>();
 
-    const firstRowKey = Array.from(this.board.keys())[0];
-    const firstRow = this.board.get(firstRowKey);
-
-    // Iterate over each column
-    for (const columnKey of firstRow?.keys() ?? []) {
-      let columnValues = Array.from(this.board.values()).map(row => row.get(columnKey));
-      let firstValidOwner = columnValues.find(cell => cell?.owner !== Player.None)?.owner;
-
-      // if no valid owner found in column, move on to next column
-      if (firstValidOwner === undefined) {
-        continue;
+      for (const rowKey of this.rowKeys) {
+        const cellOwner = this.getCell(rowKey, columnKey).owner;
+        columnOwners.push(cellOwner);
       }
 
-      let allSameOwner = columnValues.every(cell => cell?.owner === firstValidOwner);
-
-      // If all cells in column have same owner (not Player.None), we have a win
-      if (allSameOwner) {
+      if (this.sameOwner(columnOwners)) {
         return true;
       }
     }
 
-    // No winning column found
     return false;
   }
 
-  private checkDiagonalWin(): boolean {
-    const size = this.board.size;
-    const rowKeys = Array.from(this.board.keys());
-    const columnKeys = Array.from(this.board.get(rowKeys[0])?.keys() ?? []);
+  private hasDiagonalWinner(): boolean {
+    const firstDiagonalOwners = new Array<Player>();
+    const secondDiagonalOwners = new Array<Player>();
 
-    // Check top-left to bottom-right diagonal
-    let topLeftDiagonalOwner = this.board.get(rowKeys[0])?.get(columnKeys[0])?.owner;
-    for (let i = 1; i < size; i++) {
-      if (this.board.get(rowKeys[i])?.get(columnKeys[i])?.owner !== topLeftDiagonalOwner) {
-        topLeftDiagonalOwner = Player.None;
-        break;
+    for (let i = 0; i < this.size; i++) {
+      const firstDiagonalRowKey = this.rowKeys[i];
+      const firstDiagonalColumnKey = this.columnKeys[i];
+
+      const secondDiagonalRowKey = this.rowKeys[this.size - i - 1];
+      const secondDiagonalColumnKey = this.columnKeys[i];
+
+      const firstDiagonalOwner = this.getCell(firstDiagonalRowKey, firstDiagonalColumnKey).owner;
+      const secondDiagonalOwner = this.getCell(secondDiagonalRowKey, secondDiagonalColumnKey).owner;
+
+      firstDiagonalOwners.push(firstDiagonalOwner);
+      secondDiagonalOwners.push(secondDiagonalOwner);
+    }
+
+    if (this.sameOwner(firstDiagonalOwners) || this.sameOwner(secondDiagonalOwners)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private sameOwner(cellOwners: Array<Player>): boolean {
+    let firstOwner: Player | undefined;
+    for (const cellOwner of cellOwners) {
+      if (cellOwner === Player.None) {
+        return false;
+      }
+
+      if (!firstOwner) {
+        firstOwner = cellOwner;
+      }
+
+      if (cellOwner !== firstOwner) {
+        return false;
       }
     }
 
-    // Check top-right to bottom-left diagonal
-    let topRightDiagonalOwner = this.board.get(rowKeys[0])?.get(columnKeys[size - 1])?.owner;
-    for (let i = 1; i < size; i++) {
-      if (this.board.get(rowKeys[i])?.get(columnKeys[size - 1 - i])?.owner !== topRightDiagonalOwner) {
-        topRightDiagonalOwner = Player.None;
-        break;
-      }
+    return true;
+  }
+
+  public get columnKeys(): Array<string> {
+    const firstRow = this.rows.values().next().value;
+
+    if (!(firstRow instanceof Row)) {
+      throw new Error(`firstRow is not a Row.`);
     }
 
-    // If all cells in either diagonal are owned by the same player (not None), return true
-    return topLeftDiagonalOwner !== Player.None || topRightDiagonalOwner !== Player.None;
+    const cellKeys = Array.from(firstRow.cells.keys());
+    return cellKeys;
+  }
+
+  public get rowKeys(): Array<string> {
+    return Array.from(this.rows.keys());
   }
 }
 
-const game = new Board(3);
+const board = new Board(3);
 let currentPlayer = Player.X;
 
 const rl = readline.createInterface({
@@ -179,28 +205,48 @@ const askQuestion = (query: string) => new Promise<string>(resolve =>
 
 async function gameLoop() {
   while (true) {
-    game.displayBoard();
-    const input = await askQuestion(`\nPlayer ${currentPlayer}, enter your move. Order does not matter (e.g., AF is the same as FA): `);
+    board.display();
+    const input = await askQuestion(`\nPlayer ${currentPlayer}, enter two characters specifying the row and column you want to claim. Order does not matter (e.g., AF is the same as FA): `);
 
     if (input.length !== 2) {
-      console.log('Invalid input. Please enter two characters that identify row and column (or vice versa).');
+      console.log(`Invalid input. Enter two characters.`);
       continue;
     }
 
-    const sortedCoordinates = input.toUpperCase().split("").sort();
-    const columnCoordinate = sortedCoordinates[0];
-    const rowCoordinate = sortedCoordinates[1];
+    const sortedKeys = input.toUpperCase().split(``).sort();
+    const columnKey = sortedKeys[0];
+    const rowKey = sortedKeys[1];
 
-    game.markCell(columnCoordinate, rowCoordinate, currentPlayer);
+    if (!(board.columnKeys.includes(columnKey)) || !(board.rowKeys.includes(rowKey))) {
+      console.log(`Invalid input. Please ensure your entry specifies the row and column you want to claim.`);
+      continue;
+    }
 
-    if (game.checkWin()) {
-      game.displayBoard();
+    try {
+      board.markCell(rowKey, columnKey, currentPlayer);
+    } catch (err) {
+      console.log(`Invalid selection. ${err}`);
+      continue;
+    }
+
+    if (board.hasWinner()) {
+      board.display();
       console.log(`\nPlayer ${currentPlayer} wins!`);
       rl.close();
       break;
     }
 
-    currentPlayer = currentPlayer === Player.X ? Player.O : Player.X;
+    if (currentPlayer === Player.X) {
+      currentPlayer = Player.O;
+      continue;
+    }
+
+    if (currentPlayer === Player.O) {
+      currentPlayer = Player.X;
+      continue;
+    }
+
+    throw new Error(`No currentPlayer.`);
   }
 }
 
