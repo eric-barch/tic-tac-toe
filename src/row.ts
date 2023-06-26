@@ -2,10 +2,14 @@ import { Cell } from './cell';
 import { Player } from './player';
 
 export class Row {
-  private size: number;
+  private readonly size: number;
   public readonly cells: Map<string, Cell>;
 
-  public constructor(size: number) {
+  public constructor({
+    size,
+  }: {
+    size: number,
+  }) {
     this.size = size;
     this.cells = new Map<string, Cell>;
 
@@ -14,6 +18,16 @@ export class Row {
       const cell = new Cell();
       this.cells.set(key, cell);
     }
+  }
+
+  public hasWinner(): boolean {
+    const cells = Array.from(this.cells.values());
+
+    if (Cell.sameOwner({ cells })) {
+      return true;
+    }
+
+    return false;
   }
 
   public isFull(): boolean {

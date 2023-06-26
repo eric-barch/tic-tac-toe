@@ -3,27 +3,40 @@ import { Player } from './player';
 import { Row } from './row';
 
 export class Board {
-  private size: number;
-  public readonly rows: Map<string, Row>;
+  private readonly size: number;
+  private readonly rows: Map<string, Row>;
 
-  public constructor(size: number) {
-    if (size < 3 || size > 10) {
-      throw new Error('Board size must be between 3 and 10.');
+  public constructor({
+    size,
+  }: {
+    size: string,
+  }) {
+    const sizeAsNumber = Number(size);
+
+    if (!Number.isInteger(sizeAsNumber)) {
+      throw new Error(`Board size must be an integer.`);
     }
 
-    this.size = size;
+    if (sizeAsNumber < 3 || sizeAsNumber > 10) {
+      throw new Error('Board size must be between 3 and 10 inclusive.');
+    }
+
+    this.size = sizeAsNumber;
+
     this.rows = new Map<string, Row>;
 
     for (let i = 0; i < this.size; i++) {
-      const key = String.fromCharCode(65 + size + i);
-      const row = new Row(this.size);
+      const key = String.fromCharCode(65 + this.size + i);
+      const row = new Row({ size: this.size });
       this.rows.set(key, row);
     }
   }
 
   public display() {
+    // Print column headers
     console.log(`\n  ${this.columnKeys.join(` `)}`);
 
+    // Print rows
     for (const rowMap of this.rows) {
       const rowKey = rowMap[0];
       const rowValue = rowMap[1];
@@ -32,12 +45,38 @@ export class Board {
     }
   }
 
-  public claimCell(rowKey: string, columnKey: string, currentPlayer: Player) {
-    const cell = this.getCell(rowKey, columnKey);
-    cell.owner = currentPlayer;
+  public claimCell({
+    claim,
+    player,
+  }: {
+    claim: string,
+    player: Player,
+  }): Cell {
+    if (claim.length !== 2) {
+      throw new Error(`Claim must be 2 characters long.`);
+    }
+
+    const alphabetizedKeys = claim.toUpperCase().split('').sort();
+    const columnKey = alphabetizedKeys[0];
+    const rowKey = alphabetizedKeys[1];
+
+    if (!(this.rowKeys.includes(rowKey)) || !(this.columnKeys.includes(columnKey))) {
+      throw new Error(`Input does not match a row and column combination on this board.`);
+    }
+
+    const cell = this.getCell({ rowKey, columnKey });
+    cell.claim({ player });
+
+    return cell;
   }
 
-  public getCell(rowKey: string, columnKey: string): Cell {
+  public getCell({
+    rowKey,
+    columnKey,
+  }: {
+    rowKey: string,
+    columnKey: string,
+  }): Cell {
     const row = this.rows.get(rowKey);
 
     if (!row) {
@@ -72,15 +111,8 @@ export class Board {
   }
 
   private hasRowWinner(): boolean {
-    for (const rowKey of this.rowKeys) {
-      const rowOwners = new Array<Player>();
-
-      for (const columnKey of this.columnKeys) {
-        const cellOwner = this.getCell(rowKey, columnKey).owner;
-        rowOwners.push(cellOwner);
-      }
-
-      if (this.sameOwner(rowOwners)) {
+    for (const row of this.rows.values()) {
+      if (row.hasWinner()) {
         return true;
       }
     }
@@ -90,14 +122,14 @@ export class Board {
 
   private hasColumnWinner(): boolean {
     for (const columnKey of this.columnKeys) {
-      const columnOwners = new Array<Player>();
+      const columnCells = new Array<Cell>();
 
       for (const rowKey of this.rowKeys) {
-        const cellOwner = this.getCell(rowKey, columnKey).owner;
-        columnOwners.push(cellOwner);
+        const cell = this.getCell({ rowKey, columnKey });
+        columnCells.push(cell);
       }
 
-      if (this.sameOwner(columnOwners)) {
+      if (Cell.sameOwner({ cells: columnCells })) {
         return true;
       }
     }
@@ -106,8 +138,8 @@ export class Board {
   }
 
   private hasDiagonalWinner(): boolean {
-    const firstDiagonalOwners = new Array<Player>();
-    const secondDiagonalOwners = new Array<Player>();
+    const firstDiagonalCells = new Array<Cell>();
+    const secondDiagonalCells = new Array<Cell>();
 
     for (let i = 0; i < this.size; i++) {
       const firstDiagonalRowKey = this.rowKeys[i];
@@ -116,37 +148,24 @@ export class Board {
       const secondDiagonalRowKey = this.rowKeys[this.size - i - 1];
       const secondDiagonalColumnKey = this.columnKeys[i];
 
-      const firstDiagonalOwner = this.getCell(firstDiagonalRowKey, firstDiagonalColumnKey).owner;
-      const secondDiagonalOwner = this.getCell(secondDiagonalRowKey, secondDiagonalColumnKey).owner;
+      const firstDiagonalCell = this.getCell({
+        rowKey: firstDiagonalRowKey,
+        columnKey: firstDiagonalColumnKey,
+      });
+      const secondDiagonalCell = this.getCell({
+        rowKey: secondDiagonalRowKey,
+        columnKey: secondDiagonalColumnKey,
+      });
 
-      firstDiagonalOwners.push(firstDiagonalOwner);
-      secondDiagonalOwners.push(secondDiagonalOwner);
+      firstDiagonalCells.push(firstDiagonalCell);
+      secondDiagonalCells.push(secondDiagonalCell);
     }
 
-    if (this.sameOwner(firstDiagonalOwners) || this.sameOwner(secondDiagonalOwners)) {
+    if (Cell.sameOwner({ cells: firstDiagonalCells }) || Cell.sameOwner({ cells: secondDiagonalCells })) {
       return true;
     }
 
     return false;
-  }
-
-  private sameOwner(cellOwners: Array<Player>): boolean {
-    let firstOwner: Player | undefined;
-    for (const cellOwner of cellOwners) {
-      if (cellOwner === Player.None) {
-        return false;
-      }
-
-      if (!firstOwner) {
-        firstOwner = cellOwner;
-      }
-
-      if (cellOwner !== firstOwner) {
-        return false;
-      }
-    }
-
-    return true;
   }
 
   public get columnKeys(): Array<string> {
