@@ -1,42 +1,33 @@
+import { Board } from './board';
 import { Cell } from './cell';
-import { Player } from './player';
+import { CellGrouping } from './cell-grouping';
 
-export class Row {
-  private readonly size: number;
+export class Row extends CellGrouping {
+  public readonly rowKey: string;
   public readonly cells: Map<string, Cell>;
 
   public constructor({
-    size,
+    board,
+    rowKey,
   }: {
-    size: number,
+    board: Board,
+    rowKey: string,
   }) {
-    this.size = size;
+    super({ board });
+    this.rowKey = rowKey;
+
     this.cells = new Map<string, Cell>;
 
-    for (let i = 0; i < this.size; i++) {
-      const key = String.fromCharCode(65 + i);
+    for (let i = 0; i < this.board.size; i++) {
+      const columnKey = String.fromCharCode(65 + i);
       const cell = new Cell();
-      this.cells.set(key, cell);
+      this.cells.set(columnKey, cell);
     }
   }
 
-  public hasWinner(): boolean {
-    const cells = Array.from(this.cells.values());
-
-    if (Cell.sameOwner({ cells })) {
-      return true;
-    }
-
-    return false;
-  }
-
-  public isFull(): boolean {
-    for (const cell of this.cells.values()) {
-      if (cell.owner === Player.None) {
-        return false;
-      }
-    }
-
-    return true;
+  public toString(): string {
+    const cellOwners = Array.from(this.cells.values()).map(cell => cell.owner);
+    const rowString = `${this.rowKey} ${cellOwners.join(` `)}`;
+    return rowString;
   }
 }

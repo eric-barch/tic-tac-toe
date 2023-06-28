@@ -1,15 +1,21 @@
 import { Cell } from './cell';
 import { Player } from './player';
 import { Row } from './row';
+import { Column } from './column';
+import { Diagonal1 } from './diagonal-1';
+import { Diagonal2 } from './diagonal-2';
 
 export class Board {
-  private readonly size: number;
+  public readonly size: number;
   private readonly rows: Map<string, Row>;
+  private readonly columns: Map<string, Column>;
+  private readonly diagonal1: Diagonal1;
+  private readonly diagonal2: Diagonal2;
 
   public constructor({
     size,
   }: {
-    size: string,
+    size: string | number,
   }) {
     const sizeAsNumber = Number(size);
 
@@ -23,13 +29,35 @@ export class Board {
 
     this.size = sizeAsNumber;
 
+    // Generate Rows and Cells
     this.rows = new Map<string, Row>;
 
     for (let i = 0; i < this.size; i++) {
-      const key = String.fromCharCode(65 + this.size + i);
-      const row = new Row({ size: this.size });
-      this.rows.set(key, row);
+      const rowKey = String.fromCharCode(65 + this.size + i);
+      const row = new Row({
+        board: this,
+        rowKey,
+      });
+      this.rows.set(rowKey, row);
     }
+
+    // Assign Cells to Columns
+    this.columns = new Map<string, Column>;
+
+    for (let i = 0; i < this.size; i++) {
+      const columnKey = String.fromCharCode(65 + i);
+      const column = new Column({
+        board: this,
+        columnKey,
+      });
+      this.columns.set(columnKey, column);
+    }
+
+    // Assign Cells to Diagonal 1
+    this.diagonal1 = new Diagonal1({ board: this });
+
+    // Assign Cells to Diagonal 2
+    this.diagonal2 = new Diagonal2({ board: this });
   }
 
   public display() {
@@ -37,11 +65,8 @@ export class Board {
     console.log(`\n  ${this.columnKeys.join(` `)}`);
 
     // Print rows
-    for (const rowMap of this.rows) {
-      const rowKey = rowMap[0];
-      const rowValue = rowMap[1];
-      const cellOwners = Array.from(rowValue.cells.values()).map(cell => cell.owner);
-      console.log(`${rowKey} ${cellOwners.join(` `)}`);
+    for (const row of this.rows.values()) {
+      console.log(row.toString());
     }
   }
 
@@ -64,7 +89,11 @@ export class Board {
       throw new Error(`Input does not match a row and column combination on this board.`);
     }
 
-    const cell = this.getCell({ rowKey, columnKey });
+    const cell = this.getCell({
+      rowKey,
+      columnKey,
+    });
+
     cell.claim({ player });
 
     return cell;
@@ -121,15 +150,8 @@ export class Board {
   }
 
   private hasColumnWinner(): boolean {
-    for (const columnKey of this.columnKeys) {
-      const columnCells = new Array<Cell>();
-
-      for (const rowKey of this.rowKeys) {
-        const cell = this.getCell({ rowKey, columnKey });
-        columnCells.push(cell);
-      }
-
-      if (Cell.sameOwner({ cells: columnCells })) {
+    for (const column of this.columns.values()) {
+      if (column.hasWinner()) {
         return true;
       }
     }
@@ -138,30 +160,11 @@ export class Board {
   }
 
   private hasDiagonalWinner(): boolean {
-    const firstDiagonalCells = new Array<Cell>();
-    const secondDiagonalCells = new Array<Cell>();
-
-    for (let i = 0; i < this.size; i++) {
-      const firstDiagonalRowKey = this.rowKeys[i];
-      const firstDiagonalColumnKey = this.columnKeys[i];
-
-      const secondDiagonalRowKey = this.rowKeys[this.size - i - 1];
-      const secondDiagonalColumnKey = this.columnKeys[i];
-
-      const firstDiagonalCell = this.getCell({
-        rowKey: firstDiagonalRowKey,
-        columnKey: firstDiagonalColumnKey,
-      });
-      const secondDiagonalCell = this.getCell({
-        rowKey: secondDiagonalRowKey,
-        columnKey: secondDiagonalColumnKey,
-      });
-
-      firstDiagonalCells.push(firstDiagonalCell);
-      secondDiagonalCells.push(secondDiagonalCell);
+    if (this.diagonal1.hasWinner()) {
+      return true;
     }
 
-    if (Cell.sameOwner({ cells: firstDiagonalCells }) || Cell.sameOwner({ cells: secondDiagonalCells })) {
+    if (this.diagonal2.hasWinner()) {
       return true;
     }
 
@@ -169,14 +172,7 @@ export class Board {
   }
 
   public get columnKeys(): Array<string> {
-    const firstRow = this.rows.values().next().value;
-
-    if (!(firstRow instanceof Row)) {
-      throw new Error(`firstRow is not a Row.`);
-    }
-
-    const cellKeys = Array.from(firstRow.cells.keys());
-    return cellKeys;
+    return Array.from(this.columns.keys());
   }
 
   public get rowKeys(): Array<string> {

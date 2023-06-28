@@ -39,7 +39,9 @@ async function game() {
 
   while (true) {
     try {
-      const claimInput = await askForInput({ query: `\nPlayer ${currentPlayer}, enter two characters specifying the row and column you want to claim. Order does not matter (e.g., AF is the same as FA): ` });
+      const claimInput = await askForInput({
+        query: `\nPlayer ${currentPlayer}, enter two characters specifying the row and column you want to claim. Order does not matter (e.g., AF is the same as FA): `
+      });
       board.claimCell({
         claim: claimInput,
         player: currentPlayer,
